@@ -1,14 +1,16 @@
 from tkinter import *
 from tkinter import simpledialog
 from tkinter import messagebox
+import pickle
 
 class PasswordManager:
-  def __init__(self):
-    # Here we just hold the password data
-    self.passwords = []
+  def __init__(self, filename="passwords.pkl"):
+    self.filename = filename
+    self.passwords = self.load_passwords()
 
   def add_password(self, website, username, password):
     self.passwords.append({"Website": website, "Username": username, "Password": password})
+    self.save_passwords()
     messagebox.showinfo("Added!", f"Password for {website} added successfully.")
 
   def search_password(self, website):
@@ -20,7 +22,28 @@ class PasswordManager:
   def delete_password(self, website):
     initial_length = len(self.passwords)
     self.passwords = [pw for pw in self.passwords if pw["Website"] != website]
-    return len(self.passwords) < initial_length
+    if len(self.passwords) < initial_length:
+      self.save_passwords()
+      return True
+    return False
+
+  def save_passwords(self):
+    try:
+      with open(self.filename, "wb") as file:
+        pickle.dump(self.passwords, file)
+    except Exception as e:
+      messagebox.showerror("Error", f"An error occurred while saving: {e}")
+
+  def load_passwords(self):
+    # Loads passwords using pickle, or returns an empty list if file not found.
+    try:
+      with open(self.filename, "rb") as file:
+        return pickle.load(file)
+    except FileNotFoundError:
+      return []
+    except Exception as e:
+      messagebox.showerror("Error", f"An error occurred while loading passwords: {e}")
+      return []
 
 class PyPass():
   def __init__(self):
