@@ -2,21 +2,49 @@ from tkinter import *
 from tkinter import simpledialog
 from tkinter import messagebox
 import pickle
+import random
+from cryptography.fernet import Fernet
 
-class PasswordManager:
-  def __init__(self, filename="passwords.pkl"):
+class PasswordManager(object):
+  def __init__(self, filename="passwords.pkl", key_file="secret.key"):
     self.filename = filename
+    self.key_file = key_file
+    self.key = self.load_key()
+    self.cipher = Fernet(self.key)
     self.passwords = self.load_passwords()
 
+  def load_key(self):
+    try:
+      # Load the key from the key file if it exists
+      with open(self.key_file, "rb") as key_file:
+        return key_file.read()
+    except FileNotFoundError:
+      # If the key file doesn't exist, generate a new key and save it
+      key = Fernet.generate_key()
+      with open(self.key_file, "wb") as key_file:
+        key_file.write(key)
+      return key
+
+  def encrypt_password(self, password):
+    # Encrypt the password
+    return self.cipher.encrypt(password.encode()).decode()
+
+  def decrypt_password(self, encrypted_password):
+    # Decrypt the password
+    return self.cipher.decrypt(encrypted_password.encode()).decode()
+
   def add_password(self, website, username, password):
-    self.passwords.append({"Website": website, "Username": username, "Password": password})
+    encrypted_password = self.encrypt_password(password)
+    self.passwords.append({"Website": website, "Username": username, "Password": encrypted_password})
     self.save_passwords()
     messagebox.showinfo("Added!", f"Password for {website} added successfully.")
 
   def search_password(self, website):
     for pw in self.passwords:
       if pw["Website"] == website:
-        return pw
+        pw_copy = pw.copy()
+        pw_copy["Password"] = self.decrypt_password(pw["Password"])
+        return pw_copy
     return None
 
   def delete_password(self, website):
@@ -35,17 +63,21 @@ class PasswordManager:
       messagebox.showerror("Error", f"An error occurred while saving: {e}")
 
   def load_passwords(self):
-    # Loads passwords using pickle, or returns an empty list if file not found.
     try:
       with open(self.filename, "rb") as file:
-        return pickle.load(file)
+        passwords = pickle.load(file)
+        # Decrypt passwords when loading (for displaying purposes)
+        for pw in passwords:
+          pw["Password"] = self.encrypt_password(self.decrypt_password(pw["Password"]))
+        return passwords
     except FileNotFoundError:
       return []
     except Exception as e:
       messagebox.showerror("Error", f"An error occurred while loading passwords: {e}")
       return []
 
-class PyPass():
+
+class PyPass(object):
   def __init__(self):
     self.password_manager = PasswordManager()
     self.window = Tk()
@@ -102,10 +134,39 @@ class PyPass():
       self.pw_entry.delete(0, END)
 
   def generate(self):
-    # Simple generation logic
-    generated = "kl%3l2kda?12"
+    # Character lists
+    uppercase = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    lowercase = list("abcdefghijklmnopqrstuvwxyz")
+    digits = list("0123456789")
+    special = list("!@#$%^&*()-_=+[]{}|;:,.<>?")
+
+    # Ensure password has at least one of each type
+    password = [
+        random.choice(uppercase),
+        random.choice(lowercase),
+        random.choice(digits),
+        random.choice(special)
+    ]
+
+    # Add more random characters to reach desired length (e.g., 12 characters)
+    length = 12
+    all_characters = uppercase + lowercase + digits + special
+    password += random.choices(all_characters, k=length - 4)
+
+    # Shuffle to randomize order
+    random.shuffle(password)
+
+    # Join list into a string
+    generated = ''.join(password)
+    
+    # Display the generated password in the entry widget
     self.pw_entry.delete(0, END)
     self.pw_entry.insert(0, generated)
+
+    # Copy to clipboard
+    self.pw_entry.clipboard_clear()
+    self.pw_entry.clipboard_append(generated)
+
     messagebox.showinfo("Copied!", "Password Copied to Clipboard")
 
   def password_list(self):
@@ -122,7 +183,7 @@ class PyPass():
     for index, entry in enumerate(passwords):
       Label(all_passwords, text=entry["Website"], bg="white", font=("Verdana", 9)).grid(row=index+1, column=0, padx=5, pady=5, sticky="w")
       Label(all_passwords, text=entry["Username"], bg="white", font=("Verdana", 9)).grid(row=index+1, column=1, padx=5, pady=5, sticky="w")
-      Label(all_passwords, text=entry["Password"], bg="white", font=("Verdana", 9)).grid(row=index+1, column=2, padx=5, pady=5, sticky="w")
+      Label(all_passwords, text=self.password_manager.decrypt_password(entry["Password"]), bg="white", font=("Verdana", 9)).grid(row=index+1, column=2, padx=5, pady=5, sticky="w")
 
   def search(self):
     search = simpledialog.askstring("Search", "Enter the website name to search...")
