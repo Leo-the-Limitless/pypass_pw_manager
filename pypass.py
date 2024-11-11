@@ -5,8 +5,86 @@ import pickle
 import random
 from cryptography.fernet import Fernet
 
+class CustomDialog(Toplevel):
+  def __init__(self, master, title="", message="", width=300, height=150, bg="white"):
+    super().__init__(master)
+    self.title(title)
+    self.geometry(f"{width}x{height}")
+    self.configure(bg=bg)
+    
+    # Prevent interaction with the main window
+    self.transient(master)
+    self.grab_set()
+
+    # Message Label
+    self.message = Label(self, text=message, font=("Verdana", 10), bg=bg, wraplength=width - 20)
+    self.message.pack(pady=10)
+
+    # Button Frame
+    self.button_frame = Frame(self, bg=bg)
+    self.button_frame.pack(pady=10)
+
+  def add_button(self, text, command, font=("Orbitron", 9, "bold"), bg="#ffd166", fg="black"):
+    button = Button(self.button_frame, text=text, command=command, font=font, bg=bg, fg=fg, relief="solid", width=10)
+    button.pack(side=LEFT, padx=5)
+
+class SearchDialog(CustomDialog):
+  def __init__(self, master):
+    super().__init__(master, title="Search Password", message="Enter the website name to search:")
+    self.result = None
+
+    # Entry for website name
+    self.entry = Entry(self, font=("Verdana", 10), bd=1, relief="solid")
+    self.entry.pack(pady=5)
+    self.entry.focus_set()
+
+    # Buttons
+    self.add_button("Search", self.search)
+    self.add_button("Cancel", self.cancel)
+
+  def search(self):
+    self.result = self.entry.get().strip()
+    self.destroy()
+
+  def cancel(self):
+    self.result = None
+    self.destroy()
+
+class InfoDialog(CustomDialog):
+  def __init__(self, master, title, message, width=300, height=150):
+    super().__init__(master, title=title, message=message, width=width, height=height)
+
+    # OK button
+    self.add_button("OK", self.ok)
+
+  def ok(self):
+    self.destroy()
+
+class DeleteDialog(CustomDialog):
+  def __init__(self, master):
+    super().__init__(master, title="Delete Password", message="Enter the website name to delete:")
+    self.result = None
+
+    # Entry for website name
+    self.entry = Entry(self, font=("Verdana", 10), bd=1, relief="solid")
+    self.entry.pack(pady=5)
+    self.entry.focus_set()
+
+    # Buttons
+    self.add_button("Delete", self.delete)
+    self.add_button("Cancel", self.cancel)
+
+  def delete(self):
+    self.result = self.entry.get().strip()
+    self.destroy()
+
+  def cancel(self):
+    self.result = None
+    self.destroy()
+
 class PasswordManager(object):
-  def __init__(self, filename="passwords.pkl", key_file="secret.key"):
+  def __init__(self, master, filename="passwords.pkl", key_file="secret.key"):
+    self.master = master
     self.filename = filename
     self.key_file = key_file
     self.key = self.load_key()
@@ -37,7 +115,11 @@ class PasswordManager(object):
     encrypted_password = self.encrypt_password(password)
     self.passwords.append({"Website": website, "Username": username, "Password": encrypted_password})
     self.save_passwords()
-    messagebox.showinfo("Added!", f"Password for {website} added successfully.")
+    
+    self.window = Toplevel(self.master)
+    self.window.title("PyPass Password Manager")
+    self.window.config(padx=20, pady=20, bg="white")
+    InfoDialog(self.window, title="Password Added!", message=f"Password for {website} added successfully.")
 
   def search_password(self, website):
     for pw in self.passwords:
@@ -60,7 +142,10 @@ class PasswordManager(object):
       with open(self.filename, "wb") as file:
         pickle.dump(self.passwords, file)
     except Exception as e:
-      messagebox.showerror("Error", f"An error occurred while saving: {e}")
+      self.window = Toplevel(self.master)
+      self.window.title("PyPass Password Manager")
+      self.window.config(padx=20, pady=20, bg="white")
+      InfoDialog(self.window, title="Error", message=f"An error occurred while saving: {e}")
 
   def load_passwords(self):
     try:
@@ -73,16 +158,18 @@ class PasswordManager(object):
     except FileNotFoundError:
       return []
     except Exception as e:
-      messagebox.showerror("Error", f"An error occurred while loading passwords: {e}")
+      self.window = Toplevel(self.master)
+      self.window.title("PyPass Password Manager")
+      self.window.config(padx=20, pady=20, bg="white")
+      InfoDialog(self.window, title="Error!", message=f"An error occurred while loading passwords: {e}")
       return []
-
 
 class PyPass(object):
   def __init__(self):
-    self.password_manager = PasswordManager()
     self.window = Tk()
     self.window.title("PyPass Password Manager")
     self.window.config(padx=20, pady=20, bg="white")
+    self.password_manager = PasswordManager(self.window)
 
     logo_img = PhotoImage(file="logo.png")
     canvas = Canvas(self.window, width=200, height=200, bg="white", highlightthickness=0, bd=0)
@@ -126,7 +213,7 @@ class PyPass(object):
     password = self.pw_entry.get()
 
     if not website or not username or not password:
-      messagebox.showerror("Error", "Please Fill in All Fields.")
+      InfoDialog(self.window, title="Invalid Input", message="Please Fill in All Fields.")
     else:
       self.password_manager.add_password(website, username, password)
       self.website_entry.delete(0, END)
@@ -167,7 +254,7 @@ class PyPass(object):
     self.pw_entry.clipboard_clear()
     self.pw_entry.clipboard_append(generated)
 
-    messagebox.showinfo("Copied!", "Password Copied to Clipboard")
+    InfoDialog(self.window, title="Password Copied!", message="Password Copied to Clipboard")
 
   def password_list(self):
     all_passwords = Toplevel(self.window)
@@ -186,25 +273,31 @@ class PyPass(object):
       Label(all_passwords, text=self.password_manager.decrypt_password(entry["Password"]), bg="white", font=("Verdana", 9)).grid(row=index+1, column=2, padx=5, pady=5, sticky="w")
 
   def search(self):
-    search = simpledialog.askstring("Search", "Enter the website name to search...")
-    if search:
-      result = self.password_manager.search_password(search)
+    dialog = SearchDialog(self.window)
+    self.window.wait_window(dialog)  # Wait until dialog is closed
+    website = dialog.result
+
+    if website:
+      result = self.password_manager.search_password(website)
       if result:
-        messagebox.showinfo("Search Result", f"{result['Website']} | {result['Username']} | {result['Password']}")
+        InfoDialog(self.window, title="Search Result", message=f"{result['Website']} | {result['Username']} | {result['Password']}", width=450, height=120)
       else:
-        messagebox.showerror("Not Found", "No password found for " + search)
+        InfoDialog(self.window, title="Not Found", message="No password found for " + website)
     else:
-      messagebox.showerror("Error", "Please Enter the Website Name")
+      InfoDialog(self.window, title="Error", message="Please Enter the Website Name")
 
   def delete(self):
-    delete = simpledialog.askstring("Delete", "Enter the website name to delete...")
-    if delete:
-      success = self.password_manager.delete_password(delete)
+    dialog = DeleteDialog(self.window)
+    self.window.wait_window(dialog)  # Wait until dialog is closed
+    website = dialog.result
+
+    if website:
+      success = self.password_manager.delete_password(website)
       if success:
-        messagebox.showinfo("Deleted!", "Password for " + delete + " Deleted Successfully.")
+        InfoDialog(self.window, title="Deleted!", message="Password for " + website + " deleted successfully.")
       else:
-        messagebox.showerror("Not Found", "No password found for " + delete)
+        InfoDialog(self.window, title="Not Found", message="No password found for " + website)
     else:
-      messagebox.showerror("Error", "Please Enter the Website Name")
+      InfoDialog(self.window, title="Error", message="Please Enter the Website Name")
 
 PyPass()
