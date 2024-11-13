@@ -11,6 +11,7 @@ class CustomDialog(Toplevel):
     self.title(title)
     self.geometry(f"{width}x{height}")
     self.configure(bg=bg)
+    self.center_window(width, height)
     
     # Prevent interaction with the main window
     self.transient(master)
@@ -23,6 +24,11 @@ class CustomDialog(Toplevel):
     # Button Frame
     self.button_frame = Frame(self, bg=bg)
     self.button_frame.pack(pady=10)
+
+  def center_window(self, width, height):
+    x = (self.winfo_screenwidth() // 2) - (width // 2)
+    y = (self.winfo_screenheight() // 2) - (height // 2)
+    self.geometry(f"{width}x{height}+{x}+{y}")
 
   def add_button(self, text, command, font=("Orbitron", 9, "bold"), bg="#ffd166", fg="black"):
     button = Button(self.button_frame, text=text, command=command, font=font, bg=bg, fg=fg, relief="solid", width=10)
@@ -115,11 +121,8 @@ class PasswordManager(object):
     encrypted_password = self.encrypt_password(password)
     self.passwords.append({"Website": website, "Username": username, "Password": encrypted_password})
     self.save_passwords()
-    
-    self.window = Toplevel(self.master)
-    self.window.title("PyPass Password Manager")
-    self.window.config(padx=20, pady=20, bg="white")
-    InfoDialog(self.window, title="Password Added!", message=f"Password for {website} added successfully.")
+
+    InfoDialog(self.master, title="Password Added!", message=f"Password for {website} added successfully.")
 
   def search_password(self, website):
     for pw in self.passwords:
@@ -225,7 +228,7 @@ class PyPass(object):
     uppercase = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     lowercase = list("abcdefghijklmnopqrstuvwxyz")
     digits = list("0123456789")
-    special = list("!@#$%^&*()-_=+[]{}|;:,.<>?")
+    special = list("!@#$%^&*()-_+[];:,.<>?")
 
     # Ensure password has at least one of each type
     password = [
@@ -259,18 +262,41 @@ class PyPass(object):
   def password_list(self):
     all_passwords = Toplevel(self.window)
     all_passwords.title("Saved passwords")
-    all_passwords.config(bg="white")
+    all_passwords.config(bg="white", padx=20, pady=20)
 
     passwords = self.password_manager.passwords
 
+    # Create labels for headers
     Label(all_passwords, text="Website", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=0, padx=5, pady=5, sticky="w")
     Label(all_passwords, text="Username", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=1, padx=5, pady=5, sticky="w")
     Label(all_passwords, text="Password", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=2, padx=5, pady=5, sticky="w")
 
+    # Loop through saved passwords and display them
     for index, entry in enumerate(passwords):
-      Label(all_passwords, text=entry["Website"], bg="white", font=("Verdana", 9)).grid(row=index+1, column=0, padx=5, pady=5, sticky="w")
-      Label(all_passwords, text=entry["Username"], bg="white", font=("Verdana", 9)).grid(row=index+1, column=1, padx=5, pady=5, sticky="w")
-      Label(all_passwords, text=self.password_manager.decrypt_password(entry["Password"]), bg="white", font=("Verdana", 9)).grid(row=index+1, column=2, padx=5, pady=5, sticky="w")
+        # Row background color: alternating gray
+        row_color = "#FBFBFB" if index % 2 == 0 else "#F7F7F7"  # light gray for even rows
+
+        # Create a frame to wrap the entire row and apply background color
+        row_frame = Frame(all_passwords, bg=row_color)
+        row_frame.grid(row=index+1, column=0, columnspan=3, padx=5, sticky="w")
+
+        # Website Text widget (copiable, no border)
+        website_text = Text(row_frame, height=1, width=20, font=("Verdana", 10), wrap=WORD, bd=0, relief="flat", bg=row_color)
+        website_text.grid(row=0, column=0, pady=5, sticky="w")
+        website_text.insert(END, entry["Website"])
+        website_text.config(state=DISABLED)  # Make the text read-only
+        
+        # Username Text widget (copiable, no border)
+        username_text = Text(row_frame, height=1, width=20, font=("Verdana", 10), wrap=WORD, bd=0, relief="flat", bg=row_color)
+        username_text.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+        username_text.insert(END, entry["Username"])
+        username_text.config(state=DISABLED)  # Make the text read-only
+        
+        # Password Text widget (copiable, no border)
+        password_text = Text(row_frame, height=1, width=20, font=("Verdana", 10), wrap=WORD, bd=0, relief="flat", bg=row_color)
+        password_text.grid(row=0, column=2, padx=5, pady=5, sticky="w")
+        password_text.insert(END, self.password_manager.decrypt_password(entry["Password"]))
+        password_text.config(state=DISABLED)  # Make the text read-only
 
   def search(self):
     dialog = SearchDialog(self.window)
