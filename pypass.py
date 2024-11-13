@@ -228,7 +228,7 @@ class PyPass(object):
     uppercase = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     lowercase = list("abcdefghijklmnopqrstuvwxyz")
     digits = list("0123456789")
-    special = list("!@#$%^&*()-_+[];:,.<>?")
+    special = list("!@#$%^&*()-:,.<>?")
 
     # Ensure password has at least one of each type
     password = [
@@ -266,37 +266,51 @@ class PyPass(object):
 
     passwords = self.password_manager.passwords
 
-    # Create labels for headers
-    Label(all_passwords, text="Website", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=0, padx=5, pady=5, sticky="w")
-    Label(all_passwords, text="Username", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=1, padx=5, pady=5, sticky="w")
-    Label(all_passwords, text="Password", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=2, padx=5, pady=5, sticky="w")
+    # Create a canvas with no border and adjust width
+    canvas = Canvas(all_passwords, bg="white", bd=0, highlightthickness=0, width=530)
+    scrollbar = Scrollbar(all_passwords, orient="vertical", command=canvas.yview)
+    scrollable_frame = Frame(canvas, bg="white")
 
-    # Loop through saved passwords and display them
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    # Add headers
+    Label(scrollable_frame, text="Website", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=0, padx=5, pady=5, sticky="w")
+    Label(scrollable_frame, text="Username", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=1, padx=5, pady=5, sticky="w")
+    Label(scrollable_frame, text="Password", bg="white", font=("Verdana", 10, "bold")).grid(row=0, column=2, padx=5, pady=5, sticky="w")
+
+    # Display passwords
     for index, entry in enumerate(passwords):
-        # Row background color: alternating gray
-        row_color = "#FBFBFB" if index % 2 == 0 else "#F7F7F7"  # light gray for even rows
-
-        # Create a frame to wrap the entire row and apply background color
-        row_frame = Frame(all_passwords, bg=row_color)
+        row_color = "#FBFBFB" if index % 2 == 0 else "#F7F7F7"
+        row_frame = Frame(scrollable_frame, bg=row_color)
         row_frame.grid(row=index+1, column=0, columnspan=3, padx=5, sticky="w")
 
-        # Website Text widget (copiable, no border)
         website_text = Text(row_frame, height=1, width=20, font=("Verdana", 10), wrap=WORD, bd=0, relief="flat", bg=row_color)
         website_text.grid(row=0, column=0, pady=5, sticky="w")
         website_text.insert(END, entry["Website"])
-        website_text.config(state=DISABLED)  # Make the text read-only
-        
-        # Username Text widget (copiable, no border)
+        website_text.config(state=DISABLED)
+
         username_text = Text(row_frame, height=1, width=20, font=("Verdana", 10), wrap=WORD, bd=0, relief="flat", bg=row_color)
         username_text.grid(row=0, column=1, padx=5, pady=5, sticky="w")
         username_text.insert(END, entry["Username"])
-        username_text.config(state=DISABLED)  # Make the text read-only
-        
-        # Password Text widget (copiable, no border)
+        username_text.config(state=DISABLED)
+
         password_text = Text(row_frame, height=1, width=20, font=("Verdana", 10), wrap=WORD, bd=0, relief="flat", bg=row_color)
         password_text.grid(row=0, column=2, padx=5, pady=5, sticky="w")
         password_text.insert(END, self.password_manager.decrypt_password(entry["Password"]))
-        password_text.config(state=DISABLED)  # Make the text read-only
+        password_text.config(state=DISABLED)
+
+    canvas.grid(row=0, column=0, sticky="nsew")
+    scrollbar.grid(row=0, column=1, sticky="ns")
+
+    # Set canvas height only if there are more than 9 entries
+    if len(passwords) > 9:
+        canvas.config(height=300)
 
   def search(self):
     dialog = SearchDialog(self.window)
