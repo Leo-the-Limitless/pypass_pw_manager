@@ -88,6 +88,28 @@ class DeleteDialog(CustomDialog):
     self.result = None
     self.destroy()
 
+class ConfirmationDialog(CustomDialog):
+  def __init__(self, master, website):
+    super().__init__(master, title="Duplicate Website", message=f"An entry for '{website}' already exists.", width=350, height=120)
+    self.result = None
+
+    # Add Overwrite and Add New buttons
+    self.add_button("Overwrite", self.overwrite)
+    self.add_button("Add New", self.add_new)
+    self.add_button("Cancel", self.cancel)
+
+  def overwrite(self):
+    self.result = "overwrite"
+    self.destroy()
+
+  def add_new(self):
+    self.result = "add_new"
+    self.destroy()
+
+  def cancel(self):
+    self.result = None
+    self.destroy()
+
 class PasswordManager(object):
   def __init__(self, master, filename="passwords.pkl", key_file="secret.key"):
     self.master = master
@@ -118,12 +140,33 @@ class PasswordManager(object):
     return self.cipher.decrypt(encrypted_password.encode()).decode()
 
   def add_password(self, website, username, password):
+    # Check for an existing entry with the same website name
+    existing_entry = None
+    for entry in self.passwords:
+        if entry["Website"].lower() == website.lower():
+            existing_entry = entry
+            break
+
+    if existing_entry:
+        # Show confirmation dialog
+        dialog = ConfirmationDialog(self.master, website)
+        self.master.wait_window(dialog)  # Wait for user response
+
+        if dialog.result == "overwrite":
+            self.passwords.remove(existing_entry)  # Remove the existing entry
+        elif dialog.result == "add_new":
+            pass  # Proceed to add new entry
+        else:
+            return  # Cancelled by user, do nothing
+
+    # Encrypt the password and add to the list
     encrypted_password = self.encrypt_password(password)
     self.passwords.append({"Website": website, "Username": username, "Password": encrypted_password})
     self.save_passwords()
 
+    # Show confirmation message
     InfoDialog(self.master, title="Password Added!", message=f"Password for {website} added successfully.")
-
+    
   def search_password(self, website):
     for pw in self.passwords:
       if pw["Website"] == website:
@@ -263,6 +306,7 @@ class PyPass(object):
     all_passwords = Toplevel(self.window)
     all_passwords.title("Saved passwords")
     all_passwords.config(bg="white", padx=20, pady=20)
+    all_passwords.grab_set()
 
     passwords = self.password_manager.passwords
 
@@ -286,7 +330,7 @@ class PyPass(object):
 
     # Display passwords
     for index, entry in enumerate(passwords):
-        row_color = "#FBFBFB" if index % 2 == 0 else "#F7F7F7"
+        row_color = "#FEF8C6" if index % 2 == 0 else "#FFFFEB"
         row_frame = Frame(scrollable_frame, bg=row_color)
         row_frame.grid(row=index+1, column=0, columnspan=3, padx=5, sticky="w")
 
@@ -323,7 +367,7 @@ class PyPass(object):
         InfoDialog(self.window, title="Search Result", message=f"{result['Website']} | {result['Username']} | {result['Password']}", width=450, height=120)
       else:
         InfoDialog(self.window, title="Not Found", message="No password found for " + website)
-    else:
+    elif website == "":
       InfoDialog(self.window, title="Error", message="Please Enter the Website Name")
 
   def delete(self):
@@ -337,7 +381,7 @@ class PyPass(object):
         InfoDialog(self.window, title="Deleted!", message="Password for " + website + " deleted successfully.")
       else:
         InfoDialog(self.window, title="Not Found", message="No password found for " + website)
-    else:
+    elif website == "":
       InfoDialog(self.window, title="Error", message="Please Enter the Website Name")
 
 PyPass()
