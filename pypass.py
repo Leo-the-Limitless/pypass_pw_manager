@@ -124,8 +124,13 @@ class MasterPINDialog(CustomDialog):
         self.add_button("Cancel", self.cancel)
 
     def verify_pin(self):
-        self.result = self.pin_entry.get().strip()
+      pin = self.pin_entry.get().strip()
+      if len(pin) == 4 and pin.isdigit():
+        self.result = pin
         self.destroy()
+      else:
+        error_dialog = CustomDialog(self, title="Error", message="PIN must be 4 digits.", width=300, height=150)
+        error_dialog.add_button("OK", error_dialog.destroy)
 
     def cancel(self):
         self.result = None
@@ -144,8 +149,13 @@ class SetPINDialog(CustomDialog):
         self.add_button("Cancel", self.cancel)
 
     def set_pin(self):
-        self.result = self.pin_entry.get().strip()
+      pin = self.pin_entry.get().strip()
+      if len(pin) == 4 and pin.isdigit():  
+        self.result = pin
         self.destroy()
+      else:
+        error_dialog = CustomDialog(self, title="Error", message="PIN must be 4 digits.", width=300, height=150)
+        error_dialog.add_button("OK", error_dialog.destroy)
 
     def cancel(self):
         self.result = None
