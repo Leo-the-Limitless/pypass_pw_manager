@@ -110,26 +110,85 @@ class ConfirmationDialog(CustomDialog):
     self.result = None
     self.destroy()
 
+class MasterPINDialog(CustomDialog):
+    def __init__(self, master):
+        super().__init__(master, title="Enter Master PIN", message="Please enter your master PIN:", width=300, height=150)
+        self.result = None
+        self.resizable(False, False)
+
+        self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
+        self.pin_entry.pack(pady=5)
+        self.pin_entry.focus_set()
+
+        self.add_button("Login", self.verify_pin)
+        self.add_button("Cancel", self.cancel)
+
+    def verify_pin(self):
+        self.result = self.pin_entry.get().strip()
+        self.destroy()
+
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
+class SetPINDialog(CustomDialog):
+    def __init__(self, master):
+        super().__init__(master, title="Set Master PIN", message="Create a master PIN for security:", width=300, height=150)
+        self.result = None
+
+        self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
+        self.pin_entry.pack(pady=5)
+        self.pin_entry.focus_set()
+
+        self.add_button("Set PIN", self.set_pin)
+        self.add_button("Cancel", self.cancel)
+
+    def set_pin(self):
+        self.result = self.pin_entry.get().strip()
+        self.destroy()
+
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
 class PasswordManager(object):
-  def __init__(self, master, filename="passwords.pkl", key_file="secret.key"):
-    self.master = master
-    self.filename = filename
-    self.key_file = key_file
-    self.key = self.load_key()
-    self.cipher = Fernet(self.key)
-    self.passwords = self.load_passwords()
+  def __init__(self, master, filename="passwords.pkl", key_file="secret.key", pin_file="master_pin.pkl"):
+        self.master = master
+        self.filename = filename
+        self.key_file = key_file
+        self.pin_file = pin_file
+        self.key = self.load_key()
+        self.cipher = Fernet(self.key)
+        self.passwords = self.load_passwords()
 
   def load_key(self):
-    try:
-      # Load the key from the key file if it exists
-      with open(self.key_file, "rb") as key_file:
-        return key_file.read()
-    except FileNotFoundError:
-      # If the key file doesn't exist, generate a new key and save it
-      key = Fernet.generate_key()
-      with open(self.key_file, "wb") as key_file:
-        key_file.write(key)
-      return key
+      try:
+          with open(self.key_file, "rb") as key_file:
+              return key_file.read()
+      except FileNotFoundError:
+          key = Fernet.generate_key()
+          with open(self.key_file, "wb") as key_file:
+              key_file.write(key)
+          return key
+
+  def load_master_pin(self):
+      try:
+          with open(self.pin_file, "rb") as file:
+              encrypted_pin = pickle.load(file)
+              return self.cipher.decrypt(encrypted_pin).decode()
+      except FileNotFoundError:
+          return None
+
+  def save_master_pin(self, pin):
+      encrypted_pin = self.cipher.encrypt(pin.encode())
+      with open(self.pin_file, "wb") as file:
+          pickle.dump(encrypted_pin, file)
+
+  def change_master_pin(self, new_pin):
+      self.save_master_pin(new_pin)
+      # Use CustomDialog here for success message instead of messagebox
+      dialog = CustomDialog(self.master, title="Success", message="Master PIN changed successfully.", width=300, height=150)
+      dialog.add_button("OK", dialog.destroy)
 
   def encrypt_password(self, password):
     # Encrypt the password
@@ -213,45 +272,100 @@ class PasswordManager(object):
 class PyPass(object):
   def __init__(self):
     self.window = Tk()
+    self.window.geometry("1x1+{}+{}".format(
+        self.window.winfo_screenwidth() // 2, 
+        self.window.winfo_screenheight() // 2
+    ))
     self.window.title("PyPass Password Manager")
     self.window.config(padx=20, pady=20, bg="white")
     self.password_manager = PasswordManager(self.window)
 
+    master_pin = self.password_manager.load_master_pin()
+
+    if master_pin is None:
+        # Prompt user to set a new master PIN using SetPINDialog
+        set_pin_dialog = SetPINDialog(self.window)
+        self.window.wait_window(set_pin_dialog)
+        if set_pin_dialog.result:
+            self.password_manager.save_master_pin(set_pin_dialog.result)
+            master_pin = set_pin_dialog.result
+        else:
+            self.window.destroy()
+            return
+
+    # Ask for the master PIN to log in using MasterPINDialog
+    pin_dialog = MasterPINDialog(self.window)
+    self.window.wait_window(pin_dialog)
+
+    if pin_dialog.result == master_pin:
+      window_width = 580
+      window_height = 470
+
+      # Get screen width and height
+      screen_width = self.window.winfo_screenwidth()
+      screen_height = self.window.winfo_screenheight()
+
+      # Calculate the position to center the window
+      position_top = (screen_height // 2) - (window_height // 2)
+      position_left = (screen_width // 2) - (window_width // 2)
+
+      # Set the geometry with the calculated position to center it
+      self.window.geometry(f'{window_width}x{window_height}+{position_left}+{position_top}')
+      
+      self.create_ui()
+
+    elif pin_dialog.result != None and pin_dialog.result != master_pin:
+        # Use CustomDialog here to show error instead of messagebox
+        error_dialog = CustomDialog(self.window, title="Error", message="Incorrect PIN", width=300, height=150)
+        error_dialog.add_button("OK", self.window.destroy)
+    else:
+      return
+
     logo_img = PhotoImage(file="logo.png")
     canvas = Canvas(self.window, width=200, height=200, bg="white", highlightthickness=0, bd=0)
     canvas.create_image(100, 100, image=logo_img)
-    canvas.grid(row=0, column=1)
+    canvas.grid(row=1, column=1)
 
     #Labels
     website_lbl = Label(text="Website", bg="white", font=("Verdana", 9, "bold"))
-    website_lbl.grid(row=1, column=0, pady=10, sticky="e")
+    website_lbl.grid(row=2, column=0, pady=10, sticky="e")
     username_lbl = Label(text="Username / Email", bg="white", font=("Verdana", 9, "bold"))
-    username_lbl.grid(row=2, column=0, sticky="e")
+    username_lbl.grid(row=3, column=0, sticky="e")
     pw_lbl = Label(text="Password", bg="white", font=("Verdana", 9, "bold"))
-    pw_lbl.grid(row=3, column=0, sticky="e")
+    pw_lbl.grid(row=4, column=0, sticky="e")
 
     #Entries
     self.website_entry = Entry(width=43, bd=1, relief="solid", font=("Verdana", 10, "bold"))
-    self.website_entry.grid(row=1, column=1, pady=10, columnspan=2, ipady=3)
+    self.website_entry.grid(row=2, column=1, pady=10, columnspan=2, ipady=3)
     self.username_entry = Entry(width=43, bd=1, relief="solid", font=("Verdana", 10, "bold"))
-    self.username_entry.grid(row=2, column=1, columnspan=2, ipady=3)
+    self.username_entry.grid(row=3, column=1, columnspan=2, ipady=3)
     self.pw_entry = Entry(width=33, bd=1, relief="solid", font=("Verdana", 10, "bold"))
-    self.pw_entry.grid(row=3, column=1, pady=10, ipady=3)
+    self.pw_entry.grid(row=4, column=1, pady=10, ipady=3, padx=5)
 
     #Buttons
-    generate_btn = Button(text="Generate", bd=1, relief="solid", font=("Orbitron", 9, "bold"), bg="white", command=self.generate)
-    generate_btn.grid(row=3, column=2, padx=5)
+    generate_btn = Button(text=" Generate ", bd=1, relief="solid", font=("Orbitron", 9, "bold"), bg="white", command=self.generate)
+    generate_btn.grid(row=4, column=2, padx=5)
     add_button = Button(text="Add", bd=1, width=43, font=("Orbitron", 9, "bold"), bg="#003049", fg="white", activebackground="#00263A", activeforeground="white", relief="solid", pady=5, command=self.add)
-    add_button.grid(row=4, column=1, columnspan=2, padx=2)
+    add_button.grid(row=5, column=1, columnspan=2, padx=2)
 
     see_btn = Button(text="See all passwords", bd=1, relief="solid", bg="#ffd166", activebackground="#E6B854", font=("Orbitron", 9, "bold"), command=self.password_list)
-    see_btn.grid(row=5, column=1, pady=10, padx=2, sticky="ew")
+    see_btn.grid(row=6, column=1, pady=10, padx=2, sticky="ew")
     search_btn = Button(text="Search", width=14, bd=1, relief="solid", font=("Orbitron", 9, "bold"), bg="#ffd166", activebackground="#E6B854", command=self.search)
-    search_btn.grid(row=5, column=0, pady=10, padx=2, sticky="ew")
+    search_btn.grid(row=6, column=0, pady=10, padx=2, sticky="ew")
     delete_btn = Button(text="Delete", bd=1, relief="solid", font=("Orbitron", 9, "bold"), bg="#ffd166", activebackground="#E6B854", command=self.delete)
-    delete_btn.grid(row=5, column=2, pady=10, padx=2, sticky="ew")
+    delete_btn.grid(row=6, column=2, pady=10, padx=2, sticky="ew")
 
     self.window.mainloop()
+
+  def create_ui(self):
+    change_pin_btn = Button(self.window, text="Change PIN", bd=1, font=("Orbitron", 9, "bold"), bg="#003049", fg="white", activebackground="#00263A", activeforeground="white", relief="solid", pady=5, command=self.change_pin)
+    change_pin_btn.grid(row=0, column=2)
+
+  def change_pin(self):
+    set_pin_dialog = SetPINDialog(self.window)
+    self.window.wait_window(set_pin_dialog)
+    if set_pin_dialog.result:
+        self.password_manager.change_master_pin(set_pin_dialog.result)
 
   def add(self):
     website = self.website_entry.get()
@@ -271,7 +385,7 @@ class PyPass(object):
     uppercase = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     lowercase = list("abcdefghijklmnopqrstuvwxyz")
     digits = list("0123456789")
-    special = list("!@#$%^&*()-:,.<>?")
+    special = list("!@#$%^&*.?")
 
     # Ensure password has at least one of each type
     password = [
