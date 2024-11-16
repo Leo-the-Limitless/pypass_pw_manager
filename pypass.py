@@ -359,10 +359,13 @@ class PyPass(object):
     else:
       return
 
-    logo_img = PhotoImage(file="logo.png")
-    canvas = Canvas(self.window, width=200, height=200, bg="white", highlightthickness=0, bd=0)
-    canvas.create_image(100, 100, image=logo_img)
-    canvas.grid(row=1, column=1)
+    try:
+      logo_img = PhotoImage(file="logo.png")
+      canvas = Canvas(self.window, width=200, height=200, bg="white", highlightthickness=0, bd=0)
+      canvas.create_image(100, 100, image=logo_img)
+      canvas.grid(row=1, column=1)
+    except Exception as e:
+      print(f"Error loading image: {e}")
 
     #Labels
     website_lbl = Label(text="Website", bg="white", font=("Verdana", 9, "bold"))
