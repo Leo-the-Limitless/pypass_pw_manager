@@ -111,55 +111,83 @@ class ConfirmationDialog(CustomDialog):
     self.destroy()
 
 class MasterPINDialog(CustomDialog):
-    def __init__(self, master):
-        super().__init__(master, title="Enter Master PIN", message="Please enter your master PIN:", width=300, height=150)
-        self.result = None
-        self.resizable(False, False)
+  def __init__(self, master):
+    super().__init__(master, title="Enter Master PIN", message="Please enter your master PIN:", width=300, height=150)
+    self.result = None
+    self.resizable(False, False)
 
-        self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
-        self.pin_entry.pack(pady=5)
-        self.pin_entry.focus_set()
+    self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
+    self.pin_entry.pack(pady=5)
+    self.pin_entry.focus_set()
 
-        self.add_button("Login", self.verify_pin)
-        self.add_button("Cancel", self.cancel)
+    self.add_button("Login", self.verify_pin)
+    self.add_button("Cancel", self.cancel)
 
-    def verify_pin(self):
-      pin = self.pin_entry.get().strip()
-      if len(pin) == 4 and pin.isdigit():
-        self.result = pin
-        self.destroy()
-      else:
-        error_dialog = CustomDialog(self, title="Error", message="PIN must be 4 digits.", width=300, height=150)
-        error_dialog.add_button("OK", error_dialog.destroy)
+  def verify_pin(self):
+    pin = self.pin_entry.get().strip()
+    if len(pin) == 4 and pin.isdigit():
+      self.result = pin
+      self.destroy()
+    else:
+      error_dialog = CustomDialog(self, title="Error", message="PIN must be 4 digits.", width=300, height=150)
+      error_dialog.add_button("OK", error_dialog.destroy)
 
-    def cancel(self):
-        self.result = None
-        self.destroy()
+  def cancel(self):
+    self.result = None
+    self.destroy()
 
 class SetPINDialog(CustomDialog):
-    def __init__(self, master):
-        super().__init__(master, title="Set Master PIN", message="Create a master PIN for security:", width=300, height=150)
-        self.result = None
+  def __init__(self, master):
+    super().__init__(master, title="Set Master PIN", message="Create a master PIN for security:", width=300, height=150)
+    self.result = None
 
-        self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
-        self.pin_entry.pack(pady=5)
-        self.pin_entry.focus_set()
+    self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
+    self.pin_entry.pack(pady=5)
+    self.pin_entry.focus_set()
 
-        self.add_button("Set PIN", self.set_pin)
-        self.add_button("Cancel", self.cancel)
+    self.add_button("Set PIN", self.set_pin)
+    self.add_button("Cancel", self.cancel)
 
-    def set_pin(self):
-      pin = self.pin_entry.get().strip()
-      if len(pin) == 4 and pin.isdigit():  
-        self.result = pin
-        self.destroy()
-      else:
-        error_dialog = CustomDialog(self, title="Error", message="PIN must be 4 digits.", width=300, height=150)
-        error_dialog.add_button("OK", error_dialog.destroy)
+  def set_pin(self):
+    pin = self.pin_entry.get().strip()
 
-    def cancel(self):
-        self.result = None
-        self.destroy()
+    if len(pin) == 4 and pin.isdigit():  # Check if PIN is valid
+      # Ask for confirmation of the PIN
+      self.show_pin_confirmation(pin)
+    else:
+      # Show error dialog if PIN is not 4 digits
+      error_dialog = CustomDialog(self, title="Error", message="PIN must be 4 digits.", width=300, height=150)
+      error_dialog.add_button("OK", error_dialog.destroy)
+
+  def show_pin_confirmation(self, original_pin):
+    """Show a confirmation dialog to re-enter the PIN."""
+    # Create a new dialog to confirm the PIN
+    confirm_dialog = CustomDialog(self, title="Confirm PIN", message="Re-enter your master PIN to confirm:", width=300, height=150)
+
+    confirm_pin_entry = Entry(confirm_dialog, show="*", font=("Verdana", 10), bd=1, relief="solid")
+    confirm_pin_entry.pack(pady=5)
+    confirm_pin_entry.focus_set()
+
+    confirm_dialog.add_button("Confirm", lambda: self.confirm_pin(confirm_dialog, confirm_pin_entry, original_pin))
+    confirm_dialog.add_button("Cancel", confirm_dialog.destroy)
+
+  def confirm_pin(self, dialog, confirm_pin_entry, original_pin):
+    """Confirm the PIN entered in the confirmation dialog."""
+    confirm_pin = confirm_pin_entry.get().strip()
+
+    if confirm_pin == original_pin:
+      # If PINs match, save the result and close the dialog
+      self.result = original_pin
+      dialog.destroy()
+      self.destroy()
+    else:
+      # If PINs don't match, show an error
+      error_dialog = CustomDialog(self, title="Error", message="PINs do not match. Please try again.", width=300, height=150)
+      error_dialog.add_button("OK", error_dialog.destroy)
+
+  def cancel(self):
+    self.result = None
+    self.destroy()
 
 class PasswordManager(object):
   def __init__(self, master, filename="passwords.pkl", key_file="secret.key", pin_file="master_pin.pkl"):
