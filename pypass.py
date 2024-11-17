@@ -57,11 +57,28 @@ class SearchDialog(CustomDialog):
     self.destroy()
 
 class InfoDialog(CustomDialog):
-  def __init__(self, master, title, message, width=300, height=150):
+  def __init__(self, master, title, message=None, content=None, width=300, height=150):
     super().__init__(master, title=title, message=message, width=width, height=height)
 
-    # OK button
-    self.add_button("OK", self.ok)
+    if content:
+      text_area = Text(self, wrap="none", height=10, width=50, padx=10, pady=10, bd=1, relief="solid", font=("Verdana", 10, "bold"))
+      text_area.insert("1.0", content)
+      text_area.config(state="disabled")  
+      text_area.pack(expand=True, fill="both", padx=15, pady=5)
+
+      scroll_y = Scrollbar(self, orient="vertical", command=text_area.yview)
+      scroll_x = Scrollbar(self, orient="horizontal", command=text_area.xview)
+      text_area.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+      scroll_y.pack(side="right", fill="y")
+      scroll_x.pack(side="bottom", fill="x")
+
+    ok_button = Button(
+      self, text="OK", command=self.ok,
+      font=("Orbitron", 9, "bold"), bg="#ffd166", fg="black",
+      relief="solid", width=10
+    )
+    ok_button.pack(pady=(10, 20))
 
   def ok(self):
     self.destroy()
@@ -265,12 +282,14 @@ class PasswordManager(object):
     InfoDialog(self.master, title="Password Added!", message=f"Password for {website} added successfully.")
     
   def search_password(self, website):
+    results = []
     for pw in self.passwords:
-      if pw["Website"] == website:
+      if pw["Website"].lower() == website.lower():
         pw_copy = pw.copy()
         pw_copy["Password"] = self.decrypt_password(pw["Password"])
-        return pw_copy
-    return None
+        results.append(pw_copy)
+
+    return results if results else None
 
   def delete_password(self, website):
     initial_length = len(self.passwords)
@@ -513,17 +532,38 @@ class PyPass(object):
 
   def search(self):
     dialog = SearchDialog(self.window)
-    self.window.wait_window(dialog)  # Wait until dialog is closed
+    self.window.wait_window(dialog) 
     website = dialog.result
 
     if website:
       result = self.password_manager.search_password(website)
       if result:
-        InfoDialog(self.window, title="Search Result", message=f"{result['Website']} | {result['Username']} | {result['Password']}", width=450, height=120)
+        results_text = "Website | Username | Password\n"
+        results_text += "-" * 40 + "\n"
+        for r in result:
+          results_text += f"{r['Website']} | {r['Username']} | {r['Password']}\n"
+
+        # Display results in a single dialog with copyable text
+        InfoDialog(
+            self.window,
+            title="Search Results",
+            message=None,  # No pre-set message
+            width=500,
+            height=400,
+            content=results_text  # Pass results text to the dialog
+        )
       else:
-        InfoDialog(self.window, title="Not Found", message="No password found for " + website)
+        InfoDialog(
+            self.window,
+            title="Not Found",
+            message=f"No password found for {website}"
+        )
     elif website == "":
-      InfoDialog(self.window, title="Error", message="Please Enter the Website Name")
+      InfoDialog(
+        self.window,
+        title="Error",
+        message="Please Enter the Website Name"
+      )
 
   def delete(self):
     dialog = DeleteDialog(self.window)
