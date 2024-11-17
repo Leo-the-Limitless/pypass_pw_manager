@@ -14,6 +14,7 @@ class CustomDialog(Toplevel):
     self.geometry(f"{width}x{height}")
     self.configure(bg=bg)
     self.center_window(width, height)
+    self.result = None
     
     # Make the dialog modal, blocking interaction with the main window
     self.transient(master)
@@ -358,13 +359,63 @@ class PasswordManager(object):
   def delete_password(self, website):
     """
     Deletes a password entry by website name. Returns True if an entry was deleted, False otherwise.
+    If multiple entries exist for the website, asks user to confirm whether to delete all or just one entry.
     """
-    initial_length = len(self.passwords)
-    self.passwords = [pw for pw in self.passwords if pw["Website"] != website]
-    if len(self.passwords) < initial_length:
+    # Find all entries with the matching website (case-insensitive)
+    matching_entries = [pw for pw in self.passwords if pw["Website"].lower() == website.lower()]
+    
+    if len(matching_entries) > 1:
+      # Ask for confirmation to delete all or just one entry
+      delete_dialog = CustomDialog(
+        self.master,  
+        title="Confirm Deletion",
+        message=f"There are {len(matching_entries)} entries for {website}. Delete all or just the first one?",
+        width=300,  
+        height=150 
+      )
+
+      delete_dialog.add_button("Delete All", lambda: self.set_delete_result(delete_dialog, "Delete All"))
+      delete_dialog.add_button("Delete One", lambda: self.set_delete_result(delete_dialog, "Delete One"))
+      
+      self.master.wait_window(delete_dialog)  # Wait for dialog to close
+      
+      # Perform deletion based on user's choice
+      if delete_dialog.result == "Delete All":
+        self.delete_all_entries(website)
+        return True
+      elif delete_dialog.result == "Delete One":
+        self.delete_one_entry(website)
+        return True
+      else:
+        return
+    
+    elif len(matching_entries) == 1:
+      # Only one entry exists, delete it
+      self.passwords = [pw for pw in self.passwords if pw["Website"].lower() != website.lower()]
       self.save_passwords()
       return True
-    return False
+    else:
+      # No entries found for the website
+      return False
+
+  def set_delete_result(self, dialog, result):
+    """
+    Sets the result attribute in the dialog and closes it.
+    """
+    dialog.result = result
+    dialog.destroy()
+
+  def delete_all_entries(self, website):
+    """Deletes all entries for the given website."""
+    self.passwords = [pw for pw in self.passwords if pw["Website"].lower() != website.lower()]
+    self.save_passwords()
+
+  def delete_one_entry(self, website):
+    """Deletes one entry for the given website."""
+    matching_entries = [pw for pw in self.passwords if pw["Website"].lower() == website.lower()]
+    if matching_entries:
+      self.passwords.remove(matching_entries[0])  # Delete the first match
+      self.save_passwords()
 
   def save_passwords(self):
     """
@@ -667,7 +718,7 @@ class PyPass(object):
       success = self.password_manager.delete_password(website)
       if success:
         InfoDialog(self.window, title="Deleted!", message="Password for " + website + " deleted successfully.")
-      else:
+      elif success == False:
         InfoDialog(self.window, title="Not Found", message="No password found for " + website)
     elif website == "":
       InfoDialog(self.window, title="Error", message="Please Enter the Website Name")
