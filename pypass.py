@@ -471,7 +471,7 @@ class PyPass(object):
     self.window.config(padx=20, pady=20, bg="white")
     self.password_manager = PasswordManager(self.window)
 
-    self.inactivity_timeout = 60 * 1000  # 60 * 1000 = 1 minute in milliseconds
+    self.inactivity_timeout = 300 * 1000  # 60 * 1000 = 1 minute in milliseconds
     self.inactivity_timer = None
 
     self.window.bind_all("<Any-KeyPress>", self.reset_timer)
