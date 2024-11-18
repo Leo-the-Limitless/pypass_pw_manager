@@ -2,6 +2,9 @@ from tkinter import *
 import pickle
 import random
 from cryptography.fernet import Fernet
+import subprocess
+import sys
+import os
 
 class CustomDialog(Toplevel):
   """
@@ -155,9 +158,11 @@ class MasterPINDialog(CustomDialog):
   Ensures the user inputs a valid 4-digit PIN or cancels the operation.
   """
   def __init__(self, master):
-    super().__init__(master, title="Enter Master PIN", message="Please enter your master PIN:", width=300, height=150)
+    super().__init__(master, title="Enter Master PIN", message="You are logged out.\n Please enter your master PIN:", width=300, height=150)
     self.result = None
     self.resizable(False, False)
+    self.master.grab_set()
+    self.focus_force()
 
     # Input field for the master PIN, masked for security
     self.pin_entry = Entry(self, show="*", font=("Verdana", 10), bd=1, relief="solid")
@@ -466,6 +471,16 @@ class PyPass(object):
     self.window.config(padx=20, pady=20, bg="white")
     self.password_manager = PasswordManager(self.window)
 
+    self.inactivity_timeout = 60 * 1000  # 60 * 1000 = 1 minute in milliseconds
+    self.inactivity_timer = None
+
+    self.window.bind_all("<Any-KeyPress>", self.reset_timer)
+    self.window.bind_all("<Any-Button>", self.reset_timer)
+    self.window.bind_all("<Motion>", self.reset_timer)
+
+    # Start the inactivity timer
+    self.start_timer()
+
     master_pin = self.password_manager.load_master_pin()
 
     if master_pin is None:
@@ -547,6 +562,35 @@ class PyPass(object):
     delete_btn.grid(row=6, column=2, pady=10, padx=2, sticky="ew")
 
     self.window.mainloop()
+
+  def reset_timer(self, event=None):
+    """Reset the inactivity timer."""
+    if self.inactivity_timer is not None:
+      self.window.after_cancel(self.inactivity_timer)
+    self.start_timer()
+
+  def start_timer(self):
+    """Start the inactivity timer."""
+    self.inactivity_timer = self.window.after(self.inactivity_timeout, self.reset_app)
+
+  def reset_app(self):
+    """Reset the application by restarting the script."""
+    self.window.destroy()
+
+    # Resolve the absolute path to the current script
+    script_path = os.path.abspath(sys.argv[0])
+
+    if not os.path.exists(script_path):
+      raise FileNotFoundError(f"Script not found: {script_path}")
+
+    # Check the Python interpreter path
+    python_executable = sys.executable
+    if not os.path.exists(python_executable):
+      raise FileNotFoundError(f"Python executable not found: {python_executable}")
+
+    # Restart the script
+    subprocess.Popen([python_executable, script_path])
+    sys.exit()
 
   def create_ui(self):
     """Sets up the UI for the Change PIN button."""
