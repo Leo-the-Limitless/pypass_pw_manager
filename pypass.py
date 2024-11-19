@@ -11,7 +11,7 @@ class CustomDialog(Toplevel):
   A custom modal dialog window that can display a message and buttons.
   Useful for prompting users or displaying alerts.
   """
-  def __init__(self, master, title="", message="", width=300, height=150, bg="white"):
+  def __init__(self, master, title="", message="", content=None, width=300, height=150, bg="white"):
     super().__init__(master)
     self.title(title)
     self.geometry(f"{width}x{height}")
@@ -25,6 +25,21 @@ class CustomDialog(Toplevel):
 
     self.message = Label(self, text=message, font=("Verdana", 10), bg=bg, wraplength=width - 20)
     self.message.pack(pady=10)
+
+    if content:
+      # Display content in a read-only Text widget with scrollbars for large text.
+      text_area = Text(self, wrap="none", height=10, width=50, padx=10, pady=10, bd=1, relief="solid", font=("Verdana", 10, "bold"))
+      text_area.insert("1.0", content)
+      text_area.config(state="disabled") # Make the text area read-only 
+      text_area.pack(expand=True, fill="both", padx=15, pady=5)
+
+      # Add vertical and horizontal scrollbars for better navigation of content
+      scroll_y = Scrollbar(self, orient="vertical", command=text_area.yview)
+      scroll_x = Scrollbar(self, orient="horizontal", command=text_area.xview)
+      text_area.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+      scroll_y.pack(side="right", fill="y")
+      scroll_x.pack(side="bottom", fill="x")
 
     self.button_frame = Frame(self, bg=bg)
     self.button_frame.pack(pady=10)
@@ -365,25 +380,45 @@ class PasswordManager(object):
   def add_password(self, website, username, password):
     """
     Adds a new password entry. Handles duplicate websites by prompting the user
-    to overwrite, add a new entry, or cancel the operation.
+    to overwrite an existing entry, add a new entry, or cancel the operation.
     """
-    # Check for an existing entry with the same website name
-    existing_entry = None
-    for entry in self.passwords:
-        if entry["Website"].lower() == website.lower():
-            existing_entry = entry
-            break
+    # Search for all existing entries with the same website name
+    existing_entries = [entry for entry in self.passwords if entry["Website"].lower() == website.lower()]
 
-    if existing_entry:
-        dialog = ConfirmationDialog(self.master, website)
-        self.master.wait_window(dialog)  # Wait for user response
+    if existing_entries:
+      # Ask the user what they want to do: overwrite, add a new entry, or cancel
+      dialog = ConfirmationDialog(self.master, website)
+      self.master.wait_window(dialog)  # Wait for user response
 
-        if dialog.result == "overwrite":
-            self.passwords.remove(existing_entry)  # Remove the existing entry
-        elif dialog.result == "add_new":
-            pass  # Proceed to add new entry
-        else:
-            return  # Cancelled by user, do nothing
+      if dialog.result == "overwrite":
+        # Show a custom dialog to select which entry to overwrite
+        content = f"Entries found for {website}:\n" + "\n".join(
+          [f"{i + 1}. Username: {entry['Username']}" for i, entry in enumerate(existing_entries)]
+        )
+        choose_dialog = CustomDialog(self.master, title="Select Entry to Overwrite", content=content, width=400, height=400)
+
+        # Input field for the user to select the entry number
+        entry_index_input = Entry(choose_dialog, font=("Verdana", 10), bd=1, relief="solid")
+        entry_index_input.pack(pady=5)
+        entry_index_input.focus_set()
+
+        # Variable to store the selected index
+        self.selected_index = None
+
+        # Add OK button to confirm the selection
+        choose_dialog.add_button(
+          "OK", lambda: self.confirm_overwrite(choose_dialog, entry_index_input, existing_entries)
+        )
+        self.master.wait_window(choose_dialog)  # Wait for user response
+
+        # If the user did not provide a valid selection, return without appending
+        if self.selected_index is None:
+          return
+
+      elif dialog.result == "add_new":
+        pass  # Proceed to add a new entry
+      else:
+        return  # Cancelled by user, do nothing
 
     # Encrypt the password and add to the list
     encrypted_password = self.encrypt_password(password)
@@ -392,7 +427,37 @@ class PasswordManager(object):
 
     # Show confirmation message
     InfoDialog(self.master, title="Password Added!", message=f"Password for {website} added successfully.")
-    
+
+  def confirm_overwrite(self, dialog, entry_index_input, existing_entries):
+    """
+    Confirms which entry the user wants to overwrite and deletes it.
+    """
+    input_value = entry_index_input.get().strip()
+    try:
+      index = int(input_value) - 1  # Convert to zero-based index
+      if 0 <= index < len(existing_entries):
+        self.passwords.remove(existing_entries[index])
+        self.selected_index = index
+        dialog.destroy()
+      else:
+        error_dialog = CustomDialog(
+          self.master,
+          title="Error",
+          message=f"Invalid entry number. Please select a number between 1 and {len(existing_entries)}.",
+          width=300,
+          height=150
+        )
+        error_dialog.add_button("OK", error_dialog.destroy)
+    except ValueError:
+      error_dialog = CustomDialog(
+        self.master,
+        title="Error",
+        message="Please enter a valid number.",
+        width=300,
+        height=150
+      )
+      error_dialog.add_button("OK", error_dialog.destroy)
+
   def search_password(self, website):
     """
     Searches for passwords by website. Decrypts passwords for display.
@@ -462,11 +527,80 @@ class PasswordManager(object):
     self.save_passwords()
 
   def delete_one_entry(self, website):
-    """Deletes one entry for the given website."""
-    matching_entries = [pw for pw in self.passwords if pw["Website"].lower() == website.lower()]
+    """
+    Deletes one entry for the given website. If multiple entries exist, 
+    prompts the user to select which one to delete.
+    """
+    # Find all matching entries
+    matching_entries = [entry for entry in self.passwords if entry["Website"].lower() == website.lower()]
+
     if matching_entries:
-      self.passwords.remove(matching_entries[0])  # Delete the first match
-      self.save_passwords()
+      if len(matching_entries) > 1:
+        # Create content for the selection dialog
+        content = f"Multiple entries found for {website}:\n" + "\n".join(
+          [f"{i + 1}. Username: {entry['Username']}" for i, entry in enumerate(matching_entries)]
+        )
+        
+        # Show a custom dialog to select which entry to delete
+        choose_dialog = CustomDialog(self.master, title="Select Entry to Delete", content=content, width=400, height=400)
+        
+        # Input field for the user to select the entry number
+        entry_index_input = Entry(choose_dialog, font=("Verdana", 10), bd=1, relief="solid")
+        entry_index_input.pack(pady=5)
+        entry_index_input.focus_set()
+
+        # Variable to store the selected index
+        self.selected_index = None
+
+        # Add OK button to confirm the selection
+        choose_dialog.add_button(
+          "OK", lambda: self.confirm_delete(choose_dialog, entry_index_input, matching_entries)
+        )
+        self.master.wait_window(choose_dialog)  # Wait for user response
+
+        # If the user did not provide a valid selection, return without deleting
+        if self.selected_index is None:
+          return
+
+      else:
+        # If only one match exists, delete it directly
+        self.passwords.remove(matching_entries[0])
+        self.save_passwords()
+
+        # Show a confirmation dialog
+        InfoDialog(self.master, title="Entry Deleted", message=f"The password for {website} has been deleted.")
+
+  def confirm_delete(self, dialog, entry_index_input, matching_entries):
+    """
+    Confirms which entry the user wants to delete and removes it.
+    """
+    input_value = entry_index_input.get().strip()
+    try:
+      index = int(input_value) - 1  # Convert to zero-based index
+      if 0 <= index < len(matching_entries):
+        self.passwords.remove(matching_entries[index])
+        self.selected_index = index
+        self.save_passwords()
+        
+        dialog.destroy()
+      else:
+        error_dialog = CustomDialog(
+          self.master,
+          title="Error",
+          message=f"Invalid entry number. Please select a number between 1 and {len(matching_entries)}.",
+          width=300,
+          height=150
+        )
+        error_dialog.add_button("OK", error_dialog.destroy)
+    except ValueError:
+      error_dialog = CustomDialog(
+        self.master,
+        title="Error",
+        message="Please enter a valid number.",
+        width=300,
+        height=150
+      )
+      error_dialog.add_button("OK", error_dialog.destroy)
 
   def save_passwords(self):
     """
@@ -517,6 +651,7 @@ class PyPass(object):
     self.window.config(padx=20, pady=20, bg="white")
     self.password_manager = PasswordManager(self.window)
 
+    # self.inactivity_timeout = 9 * 1000  
     self.inactivity_timeout = 600 * 1000  # 60 * 1000 = 1 minute in milliseconds
     self.inactivity_timer = None
 
