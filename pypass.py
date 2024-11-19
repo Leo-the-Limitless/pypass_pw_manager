@@ -203,7 +203,7 @@ class SetPINDialog(CustomDialog):
     self.pin_entry.pack(pady=5)
     self.pin_entry.focus_set() 
 
-    self.add_button("Set PIN", self.set_pin)
+    self.add_button("Continue", self.set_pin)
     self.add_button("Cancel", self.cancel)
 
   def set_pin(self):
@@ -246,15 +246,61 @@ class SetPINDialog(CustomDialog):
     if confirm_pin == original_pin:
       self.result = original_pin
       dialog.destroy()
-      self.destroy()
+
+      # Show a success message
+      success_dialog = CustomDialog(
+        self,
+        title="Success",
+        message="From now on,\n please use this PIN to log in.",
+        width=300,
+        height=150
+      )
+      success_dialog.add_button("OK", lambda: [success_dialog.destroy(), self.destroy()])
     else:
-      error_dialog = CustomDialog(self, title="Error", message="PINs do not match. Please try again.", width=300, height=150)
+      error_dialog = CustomDialog(
+        self,
+        title="Error",
+        message="PINs do not match. Please try again.",
+        width=300,
+        height=150
+      )
       error_dialog.add_button("OK", error_dialog.destroy)
 
   def cancel(self):
     self.result = None
     self.destroy()
 
+class ChangePINDialog(SetPINDialog):
+  """
+  A dialog for changing the master PIN.
+  Asks the user to confirm their current PIN before allowing them to set a new one.
+  """
+  def __init__(self, master, current_pin):
+    super().__init__(master)
+    self.current_pin = current_pin
+    self.old_pin_verified = False
+    self.title("Change Master PIN")
+    self.message.config(text="Enter your current PIN:")  # Update the message for the first step
+    self.pin_entry.delete(0, "end")  
+
+  def set_pin(self):
+    """
+    First verifies the old PIN. If correct, switches to setting a new PIN.
+    Otherwise, shows an error dialog.
+    """
+    if not self.old_pin_verified:
+      entered_pin = self.pin_entry.get().strip()
+      if entered_pin == self.current_pin:
+        self.old_pin_verified = True
+        self.message.config(text="Enter a new master PIN:")
+        self.pin_entry.delete(0, "end")  
+      else:
+        error_dialog = CustomDialog(self, title="Error", message="Incorrect current PIN.", width=300, height=150)
+        error_dialog.add_button("OK", error_dialog.destroy)
+    else:
+      # Use the parent class's `set_pin` method for setting the new PIN
+      super().set_pin()
+      
 class PasswordManager(object):
   """
   Manages passwords using encryption and stores them securely.
@@ -471,7 +517,7 @@ class PyPass(object):
     self.window.config(padx=20, pady=20, bg="white")
     self.password_manager = PasswordManager(self.window)
 
-    self.inactivity_timeout = 300 * 1000  # 60 * 1000 = 1 minute in milliseconds
+    self.inactivity_timeout = 600 * 1000  # 60 * 1000 = 1 minute in milliseconds
     self.inactivity_timer = None
 
     self.window.bind_all("<Any-KeyPress>", self.reset_timer)
@@ -598,11 +644,16 @@ class PyPass(object):
     change_pin_btn.grid(row=0, column=2)
 
   def change_pin(self):
-    """Allows the user to change the master PIN."""
-    set_pin_dialog = SetPINDialog(self.window)
-    self.window.wait_window(set_pin_dialog)
-    if set_pin_dialog.result:
-        self.password_manager.change_master_pin(set_pin_dialog.result)
+    """
+    Allows the user to change the master PIN.
+    """
+    master_pin = self.password_manager.load_master_pin()
+    
+    # Prompt the user to change the PIN
+    change_pin_dialog = ChangePINDialog(self.window, master_pin)
+    self.window.wait_window(change_pin_dialog)
+    if change_pin_dialog.result:
+      self.password_manager.save_master_pin(change_pin_dialog.result)
 
   def add(self):
     """Adds a new password entry after validating user input."""
