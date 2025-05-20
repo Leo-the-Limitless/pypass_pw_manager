@@ -485,7 +485,7 @@ class PasswordManager(object):
       delete_dialog = CustomDialog(
         self.master,  
         title="Confirm Deletion",
-        message=f"There are {len(matching_entries)} entries for {website}. Delete all or just the first one?",
+        message=f"There are {len(matching_entries)} entries for {website}. Delete all or just one?",
         width=300,  
         height=150 
       )
@@ -501,7 +501,8 @@ class PasswordManager(object):
         return True
       elif delete_dialog.result == "Delete One":
         self.delete_one_entry(website)
-        return True
+        if self.selected_index is not None:
+          return True
       else:
         return
     
